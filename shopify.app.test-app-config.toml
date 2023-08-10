@@ -2,7 +2,7 @@
 
 name = "test-app"
 client_id = "1c2bee04dc0a576ceb4a0212b71026b8"
-application_url = "https://teach-ministers-costa-shaft.trycloudflare.com"
+application_url = "https://aaron-wall-blink-scanning.trycloudflare.com"
 embedded = true
 
 [access_scopes]
@@ -11,9 +11,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://teach-ministers-costa-shaft.trycloudflare.com/auth/callback",
-  "https://teach-ministers-costa-shaft.trycloudflare.com/auth/shopify/callback",
-  "https://teach-ministers-costa-shaft.trycloudflare.com/api/auth/callback"
+  "https://aaron-wall-blink-scanning.trycloudflare.com/auth/callback",
+  "https://aaron-wall-blink-scanning.trycloudflare.com/auth/shopify/callback",
+  "https://aaron-wall-blink-scanning.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]
