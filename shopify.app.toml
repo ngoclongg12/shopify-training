@@ -1,0 +1,27 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+name = "longpn-app"
+client_id = "abb5d03a35ff0067ce6ea7a53bfdfdff"
+application_url = "https://device-story-prefix-harm.trycloudflare.com"
+embedded = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products"
+
+[auth]
+redirect_urls = [
+  "https://device-story-prefix-harm.trycloudflare.com/auth/callback",
+  "https://device-story-prefix-harm.trycloudflare.com/auth/shopify/callback",
+  "https://device-story-prefix-harm.trycloudflare.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2023-07"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "longpn-store-app.myshopify.com"
