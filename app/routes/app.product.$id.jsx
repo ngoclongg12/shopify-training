@@ -1,7 +1,5 @@
-// @ts-ignore
 import { useCallback, useEffect, useState } from "react";
-// @ts-ignore
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useActionData, useLoaderData, useSubmit } from "@remix-run/react";
 import {
   Page,
@@ -10,8 +8,6 @@ import {
   TextField,
   Box,
   Button,
-  // @ts-ignore
-  Breadcrumbs,
   Divider,
   Toast,
   Frame,
@@ -53,7 +49,6 @@ export const loader = async ({ request, params }) => {
 export async function action({ request, params }) {
   const { admin } = await authenticate.admin(request);
   const data = Object.fromEntries(await request.formData());
-  console.log(data);
 
   if (data.variants && data.variants === "onClick") {
     const productId = params.id;
@@ -64,6 +59,7 @@ export async function action({ request, params }) {
           variants(first: 5) {
             edges{
               node{
+                id
                 title
                 price
               }
@@ -80,7 +76,8 @@ export async function action({ request, params }) {
       data: responseJson.data.product.variants.edges,
     });
   } else {
-    const { id, title, descriptionHtml } = data;
+    const { id, title, descriptionHtml, variants } = data;
+    const variantsRender = JSON.parse(variants);
 
     const response = await admin.graphql(
       `mutation productUpdate ($input: ProductInput!) {
@@ -101,6 +98,33 @@ export async function action({ request, params }) {
         },
       }
     );
+
+    variantsRender &&
+      variantsRender.map(async ({ id, price }) => {
+        console.log(id, price);
+        await admin.graphql(
+          `mutation productVariantUpdate($input: ProductVariantInput!) {
+        productVariantUpdate(input: $input) {
+          productVariant {
+            price
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }`,
+          {
+            variables: {
+              input: {
+                id,
+                price,
+              },
+            },
+          }
+        );
+      });
+
     const responseJson = await response.json();
 
     return json({ variants: false, data: responseJson, success: true });
@@ -125,44 +149,72 @@ export default function Products() {
   ) : null;
 
   function handleSave() {
-    if (actionData && actionData?.variants) {
-      if (
-        product.title === formProduct.title &&
-        product.description === formProduct.description
-      ) {
-        setError(true);
-        setContentToast("Data is unchanged");
-        toggleActive();
-        return;
-      }
-    } else {
-      if (
-        product.title === formProduct.title &&
-        product.description === formProduct.description
-      ) {
-        setError(true);
-        setContentToast("Data is unchanged");
-        toggleActive();
-        return;
-      }
-    }
+    // validate before submit
+    // if (actionData && actionData?.variants) {
+    //   if (
+    //     product.title === formProduct.title &&
+    //     product.description === formProduct.description
+    //   ) {
+    //     setError(true);
+    //     setContentToast("Data is unchanged");
+    //     toggleActive();
+    //     return;
+    //   } else {
+    //     setError(false);
+    //   }
+    // } else {
+    //   if (
+    //     product.title === formProduct.title &&
+    //     product.description === formProduct.description
+    //   ) {
+    //     setError(true);
+    //     setContentToast("Data is unchanged");
+    //     toggleActive();
+    //     return;
+    //   } else {
+    //     setError(false);
+    //   }
+    // }
+    // console.log(formProduct?.variants, 'form');
+    // console.log(actionData?.data, "action");
+
+    const a = formProduct?.variants.filter(
+      (variant, key) =>
+        JSON.stringify(variant) !== JSON.stringify(actionData?.data[key].node)
+    );
 
     const data = {
       id: formProduct.id,
       title: formProduct.title,
       descriptionHtml: formProduct.description,
+      variants: JSON.stringify(formProduct?.variants),
     };
 
     submit(data, { method: "post" });
   }
 
+  // useEffect(() => {
+  //   // handle toast
+  //   if (actionData?.success && !error) {
+  //     setContentToast("Save success");
+  //     setError(false);
+  //     toggleActive();
+  //   }
+  // }, [actionData?.success, actionData]);
+
   useEffect(() => {
-    if (actionData?.success) {
-      setContentToast("Save success");
-      setError(false);
+    if (actionData && actionData.variants) {
+      let arrayVariant = [];
+      actionData.data.map(({ node: { id, price, title } }) => {
+        arrayVariant.push({ id, title, price });
+      });
+
+      setFormProduct({
+        ...formProduct,
+        variants: arrayVariant,
+      });
     }
-    toggleActive();
-  }, [actionData?.success]);
+  }, [actionData]);
 
   return (
     <Frame>
@@ -212,13 +264,13 @@ export default function Products() {
                 </Button>
               </div>
 
-              {actionData && actionData.variants && (
+              {formProduct.variants && (
                 <>
                   <div style={{ display: "flex", width: "100%" }}>
                     <div style={{ flexBasis: "50%" }}>Variant</div>
                     <div style={{ flexBasis: "50%" }}>Price</div>
                   </div>
-                  {actionData.data.map(({ node }, key) => {
+                  {formProduct.variants.map((item, key) => {
                     return (
                       <div style={{ display: "flex", width: "100%" }}>
                         <div style={{ flexBasis: "50%" }}>
@@ -228,7 +280,7 @@ export default function Products() {
                               <FormLayout.Group>
                                 <TextField
                                   autoComplete="off"
-                                  value={node.title}
+                                  value={item.title}
                                   disabled={true}
                                 />
                               </FormLayout.Group>
@@ -242,14 +294,14 @@ export default function Products() {
                               <FormLayout.Group>
                                 <TextField
                                   type="number"
-                                  onChange={(price) =>
+                                  onChange={(price) => {
+                                    formProduct.variants[key].price = price;
                                     setFormProduct({
                                       ...formProduct,
-                                      variants: { key, price },
-                                    })
-                                  }
+                                    });
+                                  }}
                                   autoComplete="off"
-                                  value={node.price}
+                                  value={formProduct.variants[key].price}
                                 />
                               </FormLayout.Group>
                             </FormLayout>

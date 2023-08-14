@@ -1,9 +1,7 @@
-import { useEffect } from "react";
-import { json } from "@remix-run/node";
+import { useEffect, useState } from "react";
 import {
   useActionData,
   useLoaderData,
-  useNavigation,
   useSubmit,
 } from "@remix-run/react";
 import {
@@ -23,8 +21,11 @@ export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
 
   const response = await admin.graphql(
-    `query ($numProducts: Int!, $cursor: String) {
-      products(first: $numProducts, after: $cursor) {
+    `query ($first: Int!, $cursor: String) {
+      products(first: $first, after: $cursor) {
+        edges {
+          cursor
+        }
         nodes {
           id
           title
@@ -36,13 +37,14 @@ export const loader = async ({ request }) => {
         }
         pageInfo {
           hasNextPage
+          hasPreviousPage
           endCursor
         }
       }
     }`,
     {
       variables: {
-        numProducts: 10,
+        first: 5,
         cursor: null,
       },
     }
@@ -50,11 +52,85 @@ export const loader = async ({ request }) => {
 
   const responseJson = await response.json();
 
-  return responseJson.data.products.nodes;
+  return responseJson.data.products;
 };
 
+export async function action({ request }) {
+  const { admin } = await authenticate.admin(request);
+  const { cursor, action } = Object.fromEntries(await request.formData());
+
+  const response =
+    action === "next"
+      ? await admin.graphql(
+          `query ($first: Int!, $cursor: String) {
+            products(first: $first, after: $cursor) {
+              edges {
+                cursor
+              }
+              nodes {
+                id
+                title
+                status
+                description
+                vendor
+                createdAt
+                totalInventory
+              }
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                endCursor
+              }
+            }
+          }`,
+          {
+            variables: {
+              first: 5,
+              cursor,
+            },
+          }
+        )
+      : await admin.graphql(
+          `query ($last: Int!, $cursor: String) {
+            products(last: $last, before: $cursor) {
+              edges {
+                cursor
+              }
+              nodes {
+                id
+                title
+                status
+                description
+                vendor
+                createdAt
+                totalInventory
+              }
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                endCursor
+              }
+            }
+          }`,
+          {
+            variables: {
+              last: 5,
+              cursor,
+            },
+          }
+        );
+
+  const responseJson = await response.json();
+
+  return responseJson.data.products;
+}
+
 export default function Products() {
-  const products = useLoaderData();
+  const { nodes: productsLoader, edges: edgesLoader } = useLoaderData();
+  const actionData = useActionData();
+  const submit = useSubmit();
+  const [products, setProducts] = useState(productsLoader);
+  const [edges, setEdges] = useState(edgesLoader);
 
   const resourceName = {
     singular: "order",
@@ -99,10 +175,7 @@ export default function Products() {
       >
         <IndexTable.Cell>
           <Link
-            url={`/app/product/${id.replace(
-              "gid://shopify/Product/",
-              ""
-            )}`}
+            url={`/app/product/${id.replace("gid://shopify/Product/", "")}`}
           >
             {id.replace("gid://shopify/Product/", "")}
           </Link>
@@ -118,6 +191,18 @@ export default function Products() {
       </IndexTable.Row>
     )
   );
+
+  useEffect(() => {
+
+    // handle data for pagination
+    if (actionData && actionData?.edges.length) {
+      setEdges(actionData?.edges);
+      setProducts(actionData?.nodes);
+    } else {
+      setEdges(edgesLoader);
+      setProducts(productsLoader);
+    }
+  }, [actionData]);
 
   return (
     <Card>
@@ -149,11 +234,17 @@ export default function Products() {
           <Pagination
             hasPrevious
             onPrevious={() => {
-              console.log("Previous");
+              submit(
+                { action: "prev", cursor: edges[0].cursor },
+                { method: "post" }
+              );
             }}
             hasNext
             onNext={() => {
-              console.log("Next");
+              submit(
+                { action: "next", cursor: edges.slice(-1)[0].cursor },
+                { method: "post" }
+              );
             }}
           />
         </div>
