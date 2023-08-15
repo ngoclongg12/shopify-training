@@ -16,39 +16,17 @@ import {
 } from "@shopify/polaris";
 
 import { authenticate } from "../shopify.server";
+import { QUERY_PRODUCTS_FIRST, QUERY_PRODUCTS_LAST } from "~/query";
 
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
 
-  const response = await admin.graphql(
-    `query ($first: Int!, $cursor: String) {
-      products(first: $first, after: $cursor) {
-        edges {
-          cursor
-        }
-        nodes {
-          id
-          title
-          status
-          description
-          vendor
-          createdAt
-          totalInventory
-        }
-        pageInfo {
-          hasNextPage
-          hasPreviousPage
-          endCursor
-        }
-      }
-    }`,
-    {
-      variables: {
-        first: 5,
-        cursor: null,
-      },
-    }
-  );
+  const response = await admin.graphql(QUERY_PRODUCTS_FIRST, {
+    variables: {
+      first: 5,
+      cursor: null,
+    },
+  });
 
   const responseJson = await response.json();
 
@@ -61,64 +39,18 @@ export async function action({ request }) {
 
   const response =
     action === "next"
-      ? await admin.graphql(
-          `query ($first: Int!, $cursor: String) {
-            products(first: $first, after: $cursor) {
-              edges {
-                cursor
-              }
-              nodes {
-                id
-                title
-                status
-                description
-                vendor
-                createdAt
-                totalInventory
-              }
-              pageInfo {
-                hasNextPage
-                hasPreviousPage
-                endCursor
-              }
-            }
-          }`,
-          {
-            variables: {
-              first: 5,
-              cursor,
-            },
-          }
-        )
-      : await admin.graphql(
-          `query ($last: Int!, $cursor: String) {
-            products(last: $last, before: $cursor) {
-              edges {
-                cursor
-              }
-              nodes {
-                id
-                title
-                status
-                description
-                vendor
-                createdAt
-                totalInventory
-              }
-              pageInfo {
-                hasNextPage
-                hasPreviousPage
-                endCursor
-              }
-            }
-          }`,
-          {
-            variables: {
-              last: 5,
-              cursor,
-            },
-          }
-        );
+      ? await admin.graphql(QUERY_PRODUCTS_FIRST, {
+          variables: {
+            first: 5,
+            cursor,
+          },
+        })
+      : await admin.graphql(QUERY_PRODUCTS_LAST, {
+          variables: {
+            last: 5,
+            cursor,
+          },
+        });
 
   const responseJson = await response.json();
 

@@ -14,51 +14,28 @@ import {
 } from "@shopify/polaris";
 
 import { authenticate } from "../shopify.server";
+import { QUERY_PRODUCT_UPDATE_BY_ID, QUERY_VARIANTS_UPDATE } from "~/query";
 
 // Loader data
 export const loader = async ({ request, params }) => {
   const { admin } = await authenticate.admin(request);
   const productId = params.id;
 
-  const response = await admin.graphql(
-    `mutation productUpdate ($input: ProductInput!) {
-        productUpdate (input: $input) {
-          product {
-            title
-            description
-            id
-            images(first: 1) {
-              edges{
-                node{ url }
-              }
-            }
-            metafield(namespace: "extra", key: "extra") {
-              id
-              value
-            }
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }`,
-    {
-      variables: {
-        input: {
-          id: `gid://shopify/Product/${productId}`,
-          metafields: [
-            {
-              namespace: "extra",
-              key: "extra",
-              value: "default",
-              type: "single_line_text_field",
-            },
-          ],
-        },
+  const response = await admin.graphql(QUERY_PRODUCT_UPDATE_BY_ID, {
+    variables: {
+      input: {
+        id: `gid://shopify/Product/${productId}`,
+        metafields: [
+          {
+            namespace: "extra",
+            key: "extra",
+            value: "default",
+            type: "single_line_text_field",
+          },
+        ],
       },
-    }
-  );
+    },
+  });
 
   const responseJson = await response.json();
 
@@ -99,63 +76,30 @@ export async function action({ request, params }) {
     const { id, title, descriptionHtml, variants, metafield } = data;
 
     // update product by id
-    const response = await admin.graphql(
-      `mutation productUpdate ($input: ProductInput!) {
-        productUpdate (input: $input) {
-          product {
-            id
-            title
-            metafield(namespace: "extra", key: "extra") {
-              id
-              value
-            }
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }`,
-      {
-        variables: {
-          input: {
-            id,
-            title,
-            descriptionHtml,
-            metafields: [JSON.parse(metafield)],
-          },
+    const response = await admin.graphql(QUERY_PRODUCT_UPDATE_BY_ID, {
+      variables: {
+        input: {
+          id,
+          title,
+          descriptionHtml,
+          metafields: [JSON.parse(metafield)],
         },
-      }
-    );
+      },
+    });
     const productResponse = await response.json();
     const variantsRender = variants !== "undefined" && JSON.parse(variants);
 
     if (variantsRender) {
       // update variants by id
       await variantsRender.map(async ({ id, price }) => {
-        await admin.graphql(
-          `mutation productVariantUpdate($input: ProductVariantInput!) {
-            productVariantUpdate(input: $input) {
-              productVariant {
-                id
-                price
-                title
-              }
-              userErrors {
-                field
-                message
-              }
-            }
-          }`,
-          {
-            variables: {
-              input: {
-                id,
-                price,
-              },
+        await admin.graphql(QUERY_VARIANTS_UPDATE, {
+          variables: {
+            input: {
+              id,
+              price,
             },
-          }
-        );
+          },
+        });
       });
     }
 
@@ -170,8 +114,7 @@ export default function Products() {
   const [formProduct, setFormProduct] = useState(product);
   const [error, setError] = useState(false);
   const [contentToast, setContentToast] = useState("");
-  const srcImageProduct = product.images.edges[0].node.url;
-
+  const srcImageProduct = product.images.edges[0]?.node.url;
   const [active, setActive] = useState(false);
 
   const toggleActive = useCallback(() => setActive((active) => !active), []);
