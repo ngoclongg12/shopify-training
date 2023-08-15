@@ -21,23 +21,48 @@ export const loader = async ({ request, params }) => {
   const productId = params.id;
 
   const response = await admin.graphql(
-    `query {
-    product(id: "gid://shopify/Product/${productId}") {
-      title
-      description
-      id
-      images(first: 1) {
-        edges{
-          node{ url }
+    `mutation productUpdate ($input: ProductInput!) {
+        productUpdate (input: $input) {
+          product {
+            title
+            description
+            id
+            images(first: 1) {
+              edges{
+                node{ url }
+              }
+            }
+            metafield(namespace: "extra", key: "extra") {
+              id
+              value
+            }
+          }
+          userErrors {
+            field
+            message
+          }
         }
-      }
+      }`,
+    {
+      variables: {
+        input: {
+          id: `gid://shopify/Product/${productId}`,
+          metafields: [
+            {
+              namespace: "extra",
+              key: "extra",
+              value: "default",
+              type: "single_line_text_field",
+            },
+          ],
+        },
+      },
     }
-  }`
   );
 
   const responseJson = await response.json();
 
-  return responseJson.data.product;
+  return responseJson.data.productUpdate.product;
 };
 
 // Action submit
@@ -71,7 +96,7 @@ export async function action({ request, params }) {
       data: responseJson.data.product.variants.edges,
     });
   } else {
-    const { id, title, descriptionHtml, variants } = data;
+    const { id, title, descriptionHtml, variants, metafield } = data;
 
     // update product by id
     const response = await admin.graphql(
@@ -80,6 +105,10 @@ export async function action({ request, params }) {
           product {
             id
             title
+            metafield(namespace: "extra", key: "extra") {
+              id
+              value
+            }
           }
           userErrors {
             field
@@ -89,7 +118,12 @@ export async function action({ request, params }) {
       }`,
       {
         variables: {
-          input: { id, title, descriptionHtml },
+          input: {
+            id,
+            title,
+            descriptionHtml,
+            metafields: [JSON.parse(metafield)],
+          },
         },
       }
     );
@@ -151,7 +185,8 @@ export default function Products() {
     if (actionData && actionData?.variants) {
       if (
         product.title === formProduct.title &&
-        product.description === formProduct.description
+        product.description === formProduct.description &&
+        product.metafield.value === formProduct.metafield.value
       ) {
         const compareVariants = formProduct?.variants.filter(
           (variant, key) =>
@@ -171,7 +206,8 @@ export default function Products() {
     } else {
       if (
         product.title === formProduct.title &&
-        product.description === formProduct.description
+        product.description === formProduct.description &&
+        product.metafield.value === formProduct.metafield.value
       ) {
         setError(true);
         setContentToast("Data is unchanged");
@@ -187,6 +223,7 @@ export default function Products() {
       title: formProduct.title,
       descriptionHtml: formProduct.description,
       variants: JSON.stringify(formProduct?.variants),
+      metafield: JSON.stringify(formProduct.metafield),
     };
 
     submit(data, { method: "post" });
@@ -255,6 +292,17 @@ export default function Products() {
                   autoComplete="off"
                   value={formProduct.description}
                 />
+                <TextField
+                  label="Extra Description"
+                  onChange={(extra) => {
+                    setFormProduct({
+                      ...formProduct,
+                      metafield: { id: product.metafield.id, value: extra },
+                    });
+                  }}
+                  autoComplete="off"
+                  value={formProduct.metafield.value}
+                />
               </FormLayout>
               <div style={{ margin: "1rem 0" }}>
                 <Button
@@ -282,6 +330,7 @@ export default function Products() {
                             <FormLayout>
                               <FormLayout.Group>
                                 <TextField
+                                  label=""
                                   autoComplete="off"
                                   value={item.title}
                                   disabled={true}
@@ -296,6 +345,7 @@ export default function Products() {
                             <FormLayout>
                               <FormLayout.Group>
                                 <TextField
+                                  label=""
                                   type="number"
                                   onChange={(price) => {
                                     formProduct.variants[key].price = price;
