@@ -25,12 +25,7 @@ export const loader = async ({ request, params }) => {
     product(id: "gid://shopify/Product/${productId}") {
       title
       description
-      onlineStoreUrl
       id
-      status
-      vendor
-      createdAt
-      totalInventory
       images(first: 1) {
         edges{
           node{ url }
@@ -49,10 +44,10 @@ export const loader = async ({ request, params }) => {
 export async function action({ request, params }) {
   const { admin } = await authenticate.admin(request);
   const data = Object.fromEntries(await request.formData());
+  const productId = params.id;
 
   if (data.variants && data.variants === "onClick") {
-    const productId = params.id;
-
+    // query variant when click show
     const response = await admin.graphql(
       `query {
         product(id: "gid://shopify/Product/${productId}") {
@@ -77,8 +72,8 @@ export async function action({ request, params }) {
     });
   } else {
     const { id, title, descriptionHtml, variants } = data;
-    const variantsRender = JSON.parse(variants);
 
+    // update product by id
     const response = await admin.graphql(
       `mutation productUpdate ($input: ProductInput!) {
         productUpdate (input: $input) {
@@ -98,22 +93,26 @@ export async function action({ request, params }) {
         },
       }
     );
+    const productResponse = await response.json();
+    const variantsRender = variants !== "undefined" && JSON.parse(variants);
 
-    variantsRender &&
-      variantsRender.map(async ({ id, price }) => {
-        console.log(id, price);
+    if (variantsRender) {
+      // update variants by id
+      await variantsRender.map(async ({ id, price }) => {
         await admin.graphql(
           `mutation productVariantUpdate($input: ProductVariantInput!) {
-        productVariantUpdate(input: $input) {
-          productVariant {
-            price
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }`,
+            productVariantUpdate(input: $input) {
+              productVariant {
+                id
+                price
+                title
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }`,
           {
             variables: {
               input: {
@@ -124,10 +123,9 @@ export async function action({ request, params }) {
           }
         );
       });
+    }
 
-    const responseJson = await response.json();
-
-    return json({ variants: false, data: responseJson, success: true });
+    return json({ variants: false, data: productResponse, success: true });
   }
 }
 
@@ -150,38 +148,39 @@ export default function Products() {
 
   function handleSave() {
     // validate before submit
-    // if (actionData && actionData?.variants) {
-    //   if (
-    //     product.title === formProduct.title &&
-    //     product.description === formProduct.description
-    //   ) {
-    //     setError(true);
-    //     setContentToast("Data is unchanged");
-    //     toggleActive();
-    //     return;
-    //   } else {
-    //     setError(false);
-    //   }
-    // } else {
-    //   if (
-    //     product.title === formProduct.title &&
-    //     product.description === formProduct.description
-    //   ) {
-    //     setError(true);
-    //     setContentToast("Data is unchanged");
-    //     toggleActive();
-    //     return;
-    //   } else {
-    //     setError(false);
-    //   }
-    // }
-    // console.log(formProduct?.variants, 'form');
-    // console.log(actionData?.data, "action");
+    if (actionData && actionData?.variants) {
+      if (
+        product.title === formProduct.title &&
+        product.description === formProduct.description
+      ) {
+        const compareVariants = formProduct?.variants.filter(
+          (variant, key) =>
+            JSON.stringify(variant) !==
+            JSON.stringify(actionData?.data[key].node)
+        );
 
-    const a = formProduct?.variants.filter(
-      (variant, key) =>
-        JSON.stringify(variant) !== JSON.stringify(actionData?.data[key].node)
-    );
+        if (!compareVariants.length) {
+          setError(true);
+          setContentToast("Data is unchanged");
+          toggleActive();
+          return;
+        }
+      } else {
+        setError(false);
+      }
+    } else {
+      if (
+        product.title === formProduct.title &&
+        product.description === formProduct.description
+      ) {
+        setError(true);
+        setContentToast("Data is unchanged");
+        toggleActive();
+        return;
+      } else {
+        setError(false);
+      }
+    }
 
     const data = {
       id: formProduct.id,
@@ -193,14 +192,18 @@ export default function Products() {
     submit(data, { method: "post" });
   }
 
-  // useEffect(() => {
-  //   // handle toast
-  //   if (actionData?.success && !error) {
-  //     setContentToast("Save success");
-  //     setError(false);
-  //     toggleActive();
-  //   }
-  // }, [actionData?.success, actionData]);
+  useEffect(() => {
+    // handle toast
+    if (actionData?.success && !error) {
+      setFormProduct({
+        ...formProduct,
+        variants: null,
+      });
+      setContentToast("Save success");
+      setError(false);
+      toggleActive();
+    }
+  }, [actionData?.success, actionData]);
 
   useEffect(() => {
     if (actionData && actionData.variants) {
